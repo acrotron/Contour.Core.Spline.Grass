@@ -1,8 +1,8 @@
 # Contour.Core.Spline.Grass
 
-A C# implementation of the **Completely Regularized Spline with Tension (CRST)** interpolation algorithm from [GRASS GIS `v.surf.rst`](https://grass.osgeo.org/grass-stable/manuals/v.surf.rst.html), plus marching-squares contour generation.
+A C# implementation of the **Completely Regularized Spline with Tension (CRST)** interpolation algorithm from [GRASS GIS `v.surf.rst`](https://grass.osgeo.org/grass-stable/manuals/v.surf.rst.html).
 
-Converts scattered point data into a regular grid and produces contour lines/polygons suitable for noise mapping and similar applications.
+Converts scattered point data into a regular grid suitable for noise mapping and similar applications.
 
 ## Pipeline
 
@@ -12,12 +12,6 @@ Scattered Points                    (WGS84 lon/lat with noise values)
 Projected Points                    (meters, Lambert Conformal Conic)
     | SplineTensionGrass (GRASS v.surf.rst)
 Regular Grid                        (CoordinateM[nCols, nRows] at cell centers)
-    | RasterGrid.FromNodes (bilinear center interpolation)
-Sub-Triangle Mesh                   (4 triangles per cell with adjacency)
-    | MarchingSquaresContourLines (linear interpolation + tracing)
-Contour Lines                       (Dictionary<interval, List<LineString>>)
-    | MarchingSquaresContourPolygons
-Contour Polygons                    (Dictionary<interval, MultiPolygon>)
 ```
 
 ## Algorithm
@@ -49,14 +43,6 @@ Processing follows GRASS's `v.surf.rst` flow:
 | `kmax2` | 600 | KMAX2 (2x npmin) | Max points gathered per segment |
 | `dmin` | cellSize/2 | dmin | Min inter-point distance |
 | `cellSize` | min(W,H)/250 | ew_res/ns_res | Grid cell size from point extent |
-
-## Contour Generation (Marching Squares)
-
-After the spline produces a regular grid, contour lines are generated using a marching squares approach matching [Esri's contouring algorithm](https://pro.arcgis.com/en/pro-app/3.4/tool-reference/spatial-analyst/how-contouring-works.htm):
-
-1. **Cell subdivision** -- each raster cell (2x2 corners) is split into 4 sub-triangles via a bilinear center point
-2. **Contour tracing** -- linear interpolation along triangle edges finds contour crossings; adjacent intersections are connected into polylines
-3. **Contour polygons** -- lines at adjacent intervals are combined into closed polygons representing bands between contour levels
 
 ## Performance Optimizations
 
@@ -103,7 +89,7 @@ A comparison script is included at `run_grass_comparison.py`. It takes a directo
 grass --tmp-project EPSG:4326 --exec python run_grass_comparison.py example/
 ```
 
-An example input file is included in `example/sample_points.csv` (102 points around New York). See the script header for full input format details.
+An example input file is included in `example/sample_points.csv` (500 points around New York). See the script header for full input format details.
 
 ## Scientific References
 
