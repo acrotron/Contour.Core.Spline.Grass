@@ -1,0 +1,19 @@
+This project is a C# reimplementation of algorithms from GRASS GIS v.surf.rst.
+
+The original GRASS GIS source code is licensed under the GNU General Public License
+version 2 or later (GPL-2.0-or-later). This reimplementation is therefore also
+distributed under the same license.
+
+Original authors: Lubos Mitas, Helena Mitasova, I. Kosinovsky, D. Gerdes, D. McCauley
+C# reimplementation: 2026, Acrotron
+
+See the full GPL v2 license text at: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+GRASS GIS source: https://github.com/OSGeo/grass
+Key source files reimplemented:
+  - lib/rst/interp_float/segmen2d.c (segment processing)
+  - lib/rst/interp_float/interp2d.c (grid evaluation)
+  - lib/rst/interp_float/func2d.c (CRST basis function)
+  - lib/rst/qtree/qtree.c (quadtree)
+  - lib/rst/data/dataquad.c (quadrant operations)
+  - vector/v.surf.rst/main.c (pipeline orchestration)

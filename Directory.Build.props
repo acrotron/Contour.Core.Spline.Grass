@@ -1,0 +1,14 @@
+<Project>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<DisableFastUpToDateCheck>true</DisableFastUpToDateCheck>
+		<Authors>Acrotron</Authors>
+		<Company>Acrotron</Company>
+		<Copyright>Copyright (c) 2026 Acrotron</Copyright>
+		<RepositoryUrl>https://github.com/bjorn/Contour.Core.Spline.Grass</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+	</PropertyGroup>
+</Project>

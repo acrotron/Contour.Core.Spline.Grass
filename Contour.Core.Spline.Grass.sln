@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11520.95 d18.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contour.Core.Spline.Grass", "Contour.Core.Spline.Grass\Contour.Core.Spline.Grass.csproj", "{4509850F-2800-5973-18A9-49694182EA82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contour.Core.Spline.Grass.Tests", "Contour.Core.Spline.Grass.Tests\Contour.Core.Spline.Grass.Tests.csproj", "{E20B143D-8FF2-3D8A-A945-9D5989E9CB34}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4509850F-2800-5973-18A9-49694182EA82}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4509850F-2800-5973-18A9-49694182EA82}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4509850F-2800-5973-18A9-49694182EA82}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4509850F-2800-5973-18A9-49694182EA82}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E20B143D-8FF2-3D8A-A945-9D5989E9CB34}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E20B143D-8FF2-3D8A-A945-9D5989E9CB34}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E20B143D-8FF2-3D8A-A945-9D5989E9CB34}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E20B143D-8FF2-3D8A-A945-9D5989E9CB34}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {32D0FE53-CEBA-4C09-BA2E-A314C455A2D2}
+	EndGlobalSection
+EndGlobal

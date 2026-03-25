@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/GRASS GIS 8.4/**)",
+      "Bash(where grass:*)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/OSGeo4W64/**)"
+    ]
+  }
+}

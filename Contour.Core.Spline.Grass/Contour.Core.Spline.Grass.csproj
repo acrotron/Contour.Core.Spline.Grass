@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Contour.Core.Spline.Grass</PackageId>
+    <Version>1.0.0</Version>
+    <Description>GRASS GIS v.surf.rst spline interpolation (Completely Regularized Spline with Tension). Reimplemented in C# from GRASS GIS source code.</Description>
+    <PackageLicenseExpression>GPL-2.0-or-later</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>spline;interpolation;grass-gis;contour;gis;quadtree;rst</PackageTags>
+    <PackageProjectUrl>https://github.com/acrotron/Contour.Core.Spline.Grass</PackageProjectUrl>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Contour.Core.Spline.Grass.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Contour.Core" />
+    <PackageReference Include="NetTopologySuite" />
+  </ItemGroup>
+</Project>
