@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: daily
+      time: "05:30"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 99
+    target-branch: "main"
+  - package-ecosystem: nuget
+    directory: "/"
+    groups:
+      nunit:
+        patterns:
+          - nunit*
+    schedule:
+      interval: daily
+      time: "05:30"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 99
+    target-branch: "main"
