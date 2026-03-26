@@ -1,0 +1,82 @@
+name: Build, Test & Publish
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - README.md
+      - LICENSE
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - README.md
+      - LICENSE
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+
+      - name: Restore
+        run: dotnet restore Contour.Core.Spline.Grass.Tests/Contour.Core.Spline.Grass.Tests.csproj
+
+      - name: Build
+        run: dotnet build Contour.Core.Spline.Grass.Tests/Contour.Core.Spline.Grass.Tests.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Contour.Core.Spline.Grass.Tests/Contour.Core.Spline.Grass.Tests.csproj --configuration Release --no-build
+
+  publish:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+
+      - name: Bump patch version
+        id: version
+        run: |
+          CSPROJ="Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj"
+          CURRENT=$(grep -oP '<Version>\K[^<]+' "$CSPROJ")
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          sed -i "s|<Version>$CURRENT</Version>|<Version>$NEW_VERSION</Version>|" "$CSPROJ"
+          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumped version: $CURRENT -> $NEW_VERSION"
+
+      - name: Restore
+        run: dotnet restore Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj
+
+      - name: Build
+        run: dotnet build Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj --configuration Release --no-restore
+
+      - name: Pack
+        run: dotnet pack Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj --configuration Release --no-build --output ./nupkg
+
+      - name: Push to NuGet
+        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Commit version bump and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj
+          git commit -m "Bump version to ${{ steps.version.outputs.version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push
+          git push --tags
