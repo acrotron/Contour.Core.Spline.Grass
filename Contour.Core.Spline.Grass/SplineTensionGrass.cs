@@ -66,7 +66,8 @@ public sealed class SplineTensionGrass : ISpline
     }
 
     /// <summary>
-    /// Interpolates scattered WGS84 points onto a regular grid using LCC projection.
+    /// Interpolates scattered WGS84 points onto a regular LCC grid.
+    /// Input points are in WGS84 (lon, lat, M). Output grid is in LCC (easting, northing, M).
     /// </summary>
     public CoordinateM[,] InterpolateToGrid(List<CoordinateM> points, double airportLatitude, double airportLongitude)
     {
@@ -103,20 +104,7 @@ public sealed class SplineTensionGrass : ISpline
         int nRows = (int)Math.Round((maxY - minY) / cellSize);
         double yOriginTop = minY + nRows * cellSize;
 
-        var projectedGrid = InterpolateToGrid(projected, cellSize, nCols, nRows, minX, yOriginTop);
-
-        var grid = new CoordinateM[nCols, nRows];
-        for (int col = 0; col < nCols; col++)
-        {
-            for (int row = 0; row < nRows; row++)
-            {
-                var cell = projectedGrid[col, row];
-                var (lon, lat) = lcc.Inverse(cell.X, cell.Y);
-                grid[col, row] = new CoordinateM(lon, lat, cell.M);
-            }
-        }
-
-        return grid;
+        return InterpolateToGrid(projected, cellSize, nCols, nRows, minX, yOriginTop);
     }
 
     /// <summary>
