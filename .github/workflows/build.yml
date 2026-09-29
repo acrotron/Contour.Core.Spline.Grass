@@ -13,6 +13,11 @@ on:
       - LICENSE
   workflow_dispatch:
 
+# One run per ref at a time, so publish jobs never overlap.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -35,19 +40,37 @@ jobs:
 
   publish:
     needs: build-and-test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Checkout
+      # Latest main, not the triggering commit: the version must continue from the last published bump.
+      - name: Checkout latest main
         uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # If code changed on main after the commit this run tested, the run for that newer commit publishes it.
+      # Commits that only touch ignored paths (README.md, LICENSE) don't count: the code is still the tested code.
+      - name: Check that main has no untested code
+        id: guard
+        run: |
+          if git diff --quiet "$GITHUB_SHA" HEAD -- . ':!README.md' ':!LICENSE'; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "main ($(git rev-parse --short HEAD)) has code changes after ${GITHUB_SHA::7}; the run for the newer commit publishes."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup .NET
+        if: steps.guard.outputs.publish == 'true'
         uses: actions/setup-dotnet@v6
 
       - name: Bump patch version
+        if: steps.guard.outputs.publish == 'true'
         id: version
         run: |
           CSPROJ="Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj"
@@ -60,23 +83,35 @@ jobs:
           echo "Bumped version: $CURRENT -> $NEW_VERSION"
 
       - name: Restore
+        if: steps.guard.outputs.publish == 'true'
         run: dotnet restore Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj
 
       - name: Build
+        if: steps.guard.outputs.publish == 'true'
         run: dotnet build Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj --configuration Release --no-restore
 
       - name: Pack
+        if: steps.guard.outputs.publish == 'true'
         run: dotnet pack Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj --configuration Release --no-build --output ./nupkg
 
-      - name: Push to NuGet
-        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-      - name: Commit version bump and tag
+      # Push the version commit before the package: if main moved in the meantime the push is rejected and nothing
+      # is published, instead of publishing a version that the next run would compute (and skip) again.
+      - name: Commit and push version bump
+        if: steps.guard.outputs.publish == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Contour.Core.Spline.Grass/Contour.Core.Spline.Grass.csproj
           git commit -m "Bump version to ${{ steps.version.outputs.version }} [skip ci]"
+          git push origin HEAD:main
+
+      # If this step fails, re-run the workflow manually (Run workflow): it bumps to the next version and publishes.
+      - name: Push to NuGet
+        if: steps.guard.outputs.publish == 'true'
+        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Tag release
+        if: steps.guard.outputs.publish == 'true'
+        run: |
           git tag "v${{ steps.version.outputs.version }}"
-          git push
-          git push --tags
+          git push origin "v${{ steps.version.outputs.version }}"
