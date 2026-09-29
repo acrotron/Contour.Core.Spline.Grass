@@ -105,4 +105,5 @@ GRASS GIS 8.4 source: https://github.com/OSGeo/grass | Key directories: `lib/rst
 
 ## License
 
-See [LICENSE](LICENSE).
+GPL-2.0-or-later, as the GRASS GIS code it reimplements. The full license text is in [LICENSE](LICENSE); attribution
+to the original GRASS GIS authors and the reimplemented source files is in [NOTICE](NOTICE).
