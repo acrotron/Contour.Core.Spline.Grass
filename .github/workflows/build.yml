@@ -28,6 +28,8 @@ jobs:
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore Contour.Core.Spline.Grass.Tests/Contour.Core.Spline.Grass.Tests.csproj
@@ -68,6 +70,8 @@ jobs:
       - name: Setup .NET
         if: steps.guard.outputs.publish == 'true'
         uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
 
       - name: Bump patch version
         if: steps.guard.outputs.publish == 'true'
