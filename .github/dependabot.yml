@@ -3,20 +3,32 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
       time: "05:30"
       timezone: Europe/Amsterdam
-    open-pull-requests-limit: 99
+    open-pull-requests-limit: 10
     target-branch: "main"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
   - package-ecosystem: nuget
     directory: "/"
-    groups:
-      nunit:
-        patterns:
-          - nunit*
     schedule:
-      interval: daily
+      interval: weekly
+      day: monday
       time: "05:30"
       timezone: Europe/Amsterdam
-    open-pull-requests-limit: 99
+    open-pull-requests-limit: 10
     target-branch: "main"
+    groups:
+      # One PR for all test tooling; library dependencies stay individual.
+      test-packages:
+        patterns:
+          - "MSTest*"
+          - "Microsoft.NET.Test.Sdk"
+          - "Microsoft.Testing.*"
+          - "coverlet*"
+          - "AwesomeAssertions"
+          - "Moq"
