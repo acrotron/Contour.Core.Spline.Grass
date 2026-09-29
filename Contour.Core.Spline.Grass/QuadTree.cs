@@ -1,4 +1,4 @@
-using NetTopologySuite.Geometries;
+﻿using NetTopologySuite.Geometries;
 
 namespace Contour.Core.Spline.Grass;
 
@@ -68,72 +68,6 @@ internal sealed class QuadTree
                 nFiltered++;
         }
         return root;
-    }
-
-    /// <summary>
-    /// Legacy build method for unit tests (batch partitioning, no density check).
-    /// </summary>
-    public static QuadTree Build(List<CoordinateM> points, int segMax)
-    {
-        double xMin = double.MaxValue, yMin = double.MaxValue;
-        double xMax = double.MinValue, yMax = double.MinValue;
-        foreach (var p in points)
-        {
-            if (p.X < xMin) xMin = p.X;
-            if (p.Y < yMin) yMin = p.Y;
-            if (p.X > xMax) xMax = p.X;
-            if (p.Y > yMax) yMax = p.Y;
-        }
-
-        var indices = Enumerable.Range(0, points.Count).ToList();
-        var root = new QuadTree(xMin, yMin, xMax, yMax);
-        root.SubdivideLegacy(points, indices, segMax);
-        return root;
-    }
-
-    private void SubdivideLegacy(List<CoordinateM> points, List<int> indices, int segMax)
-    {
-        if (indices.Count <= segMax)
-        {
-            PointIndices = indices;
-            return;
-        }
-
-        double midX = (XMin + XMax) / 2.0;
-        double midY = (YMin + YMax) / 2.0;
-
-        if (Math.Abs(XMax - XMin) < 1e-15 && Math.Abs(YMax - YMin) < 1e-15)
-        {
-            PointIndices = indices;
-            return;
-        }
-
-        Children = new QuadTree[4];
-        Children[NW] = new QuadTree(XMin, midY, midX, YMax);
-        Children[NE] = new QuadTree(midX, midY, XMax, YMax);
-        Children[SW] = new QuadTree(XMin, YMin, midX, midY);
-        Children[SE] = new QuadTree(midX, YMin, XMax, midY);
-
-        var childIndices = new List<int>[4] { new(), new(), new(), new() };
-
-        foreach (int idx in indices)
-        {
-            var p = points[idx];
-            int quad;
-            if (p.Y >= midY)
-                quad = p.X < midX ? NW : NE;
-            else
-                quad = p.X < midX ? SW : SE;
-            childIndices[quad].Add(idx);
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
-            if (childIndices[i].Count > 0)
-                Children[i]!.SubdivideLegacy(points, childIndices[i], segMax);
-            else
-                Children[i]!.PointIndices = new List<int>();
-        }
     }
 
     /// <summary>
@@ -297,7 +231,8 @@ internal sealed class QuadTree
     }
 
     /// <summary>
-    /// Finds the X-width of the smallest non-empty leaf. Matches GRASS smallest_segment.
+    /// Finds the X-width of the smallest leaf that covers at least one grid cell (leaves without points count).
+    /// Matches GRASS smallest_segment.
     /// </summary>
     public double SmallestLeafWidth()
     {
@@ -314,25 +249,6 @@ internal sealed class QuadTree
             }
         }
         return smallest;
-    }
-
-    /// <summary>
-    /// Shifts all node bounds by (-dx, -dy). Matches GRASS translate_quad:
-    /// after all points are inserted, coordinates are shifted so the minimum
-    /// point is near zero, improving floating-point precision in segment processing.
-    /// </summary>
-    public void Translate(double dx, double dy)
-    {
-        XMin -= dx;
-        YMin -= dy;
-        XMax -= dx;
-        YMax -= dy;
-
-        if (Children != null)
-        {
-            foreach (var child in Children)
-                child?.Translate(dx, dy);
-        }
     }
 
     /// <summary>
@@ -365,37 +281,6 @@ internal sealed class QuadTree
         foreach (var child in Children!)
         {
             child?.FindPointsInRegion(xs, ys, qxMin, qyMin, qxMax, qyMax, result, maxPoints);
-        }
-    }
-
-    /// <summary>
-    /// Finds all point indices within the given bounding box by traversing the tree.
-    /// Uses non-strict inequality (legacy, for backward compatibility with unit tests).
-    /// </summary>
-    public void FindPointsInRegion(List<CoordinateM> points, double qxMin, double qyMin,
-        double qxMax, double qyMax, List<int> result, int maxPoints)
-    {
-        if (qxMax < XMin || qxMin > XMax || qyMax < YMin || qyMin > YMax)
-            return;
-        if (result.Count >= maxPoints)
-            return;
-
-        if (IsLeaf)
-        {
-            if (PointIndices == null) return;
-            foreach (int idx in PointIndices)
-            {
-                if (result.Count >= maxPoints) break;
-                var p = points[idx];
-                if (p.X >= qxMin && p.X <= qxMax && p.Y >= qyMin && p.Y <= qyMax)
-                    result.Add(idx);
-            }
-            return;
-        }
-
-        foreach (var child in Children!)
-        {
-            child?.FindPointsInRegion(points, qxMin, qyMin, qxMax, qyMax, result, maxPoints);
         }
     }
 }

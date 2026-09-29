@@ -1,4 +1,4 @@
-using Contour.Core.Interfaces;
+﻿using Contour.Core.Interfaces;
 using NetTopologySuite.Geometries;
 
 namespace Contour.Core.Spline.Grass;
@@ -12,6 +12,13 @@ namespace Contour.Core.Spline.Grass;
 /// </summary>
 public sealed class SplineTensionGrass : ISpline
 {
+    /// <summary>
+    /// Largest grid, in cells, that the interpolation will allocate. The automatic cell size (see
+    /// <see cref="EstimateCellSize"/>) gives the shorter side 250 cells, so this allows point extents with an aspect
+    /// ratio up to 400:1; AEDT grids are at most about 800 x 800.
+    /// </summary>
+    public const long MaxGridCells = 25_000_000;
+
     /// <summary>
     /// Tension parameter (fi). GRASS default is 40.
     /// Higher values produce surfaces that conform more tightly to data points.
@@ -43,20 +50,32 @@ public sealed class SplineTensionGrass : ISpline
     /// </summary>
     public int KMax2 { get; }
 
+    /// <summary>
+    /// Creates the interpolator with GRASS v.surf.rst parameters.
+    /// </summary>
     /// <param name="tension">Tension parameter fi. Default 40 matches GRASS.</param>
-    /// <param name="smoothing">Smoothing parameter rsm. Default 0.1 matches GRASS.</param>
+    /// <param name="smoothing">
+    /// Smoothing parameter rsm. Default 0.1 matches GRASS. Must be zero or positive: GRASS's negative rsm (per-point
+    /// smoothing) is not implemented.
+    /// </param>
     /// <param name="segMax">Max points per segment before subdividing. Default 40.</param>
     /// <param name="npMin">Minimum points per segment. Default 300.</param>
-    /// <param name="kMax2">Maximum points per segment for solving. Default 2*npMin.</param>
+    /// <param name="kMax2">Maximum points per segment for solving. Default (0) is 2*npMin; otherwise at least npMin.</param>
+    /// <exception cref="ArgumentOutOfRangeException">A parameter is NaN, infinite or out of range.</exception>
     public SplineTensionGrass(double tension = 40.0, double smoothing = 0.1,
         int segMax = 40, int npMin = 300, int kMax2 = 0)
     {
-        if (tension <= 0)
-            throw new ArgumentOutOfRangeException(nameof(tension), "Tension must be positive.");
+        if (!(tension > 0) || double.IsInfinity(tension))
+            throw new ArgumentOutOfRangeException(nameof(tension), tension, "Tension must be positive and finite.");
+        if (!(smoothing >= 0) || double.IsInfinity(smoothing))
+            throw new ArgumentOutOfRangeException(nameof(smoothing), smoothing,
+                "Smoothing must be zero or positive and finite (per-point smoothing is not supported).");
         if (segMax < 1)
             throw new ArgumentOutOfRangeException(nameof(segMax), "segMax must be at least 1.");
         if (npMin < 4)
             throw new ArgumentOutOfRangeException(nameof(npMin), "npMin must be at least 4.");
+        if (kMax2 < 0 || (kMax2 > 0 && kMax2 < npMin))
+            throw new ArgumentOutOfRangeException(nameof(kMax2), kMax2, "kMax2 must be 0 (default: 2 * npMin) or at least npMin.");
 
         Tension = tension;
         Smoothing = smoothing;
@@ -83,37 +102,22 @@ public sealed class SplineTensionGrass : ISpline
             projected.Add(new CoordinateM(easting, northing, p.M));
         }
 
-        double cellSize = EstimateCellSize(projected);
-
-        double minX = double.MaxValue, minY = double.MaxValue;
-        double maxX = double.MinValue, maxY = double.MinValue;
-        foreach (var p in projected)
-        {
-            if (p.X < minX) minX = p.X;
-            if (p.Y < minY) minY = p.Y;
-            if (p.X > maxX) maxX = p.X;
-            if (p.Y > maxY) maxY = p.Y;
-        }
-
-        minX -= 0.5 * cellSize;
-        minY -= 0.5 * cellSize;
-        maxX += 0.5 * cellSize;
-        maxY += 0.5 * cellSize;
-
-        int nCols = (int)Math.Round((maxX - minX) / cellSize);
-        int nRows = (int)Math.Round((maxY - minY) / cellSize);
-        double yOriginTop = minY + nRows * cellSize;
-
-        return InterpolateToGrid(projected, cellSize, nCols, nRows, minX, yOriginTop);
+        return InterpolateToGrid(projected, EstimateCellSize(projected));
     }
 
     /// <summary>
-    /// Interpolates scattered points onto a regular grid with auto-determined extent.
+    /// Interpolates scattered points onto a regular grid with auto-determined extent: the points' bounding box,
+    /// expanded by half a cell on each side.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Fewer than 4 points, a cell size that is not positive and finite, or a grid over <see cref="MaxGridCells"/>.
+    /// </exception>
     public CoordinateM[,] InterpolateToGrid(List<CoordinateM> points, double cellSize)
     {
         if (points.Count < 4)
             throw new ArgumentException("Need at least 4 points for spline interpolation.", nameof(points));
+
+        ValidateCellSize(cellSize);
 
         double minX = double.MaxValue, minY = double.MaxValue;
         double maxX = double.MinValue, maxY = double.MinValue;
@@ -130,8 +134,13 @@ public sealed class SplineTensionGrass : ISpline
         maxX += 0.5 * cellSize;
         maxY += 0.5 * cellSize;
 
-        int nCols = (int)Math.Round((maxX - minX) / cellSize);
-        int nRows = (int)Math.Round((maxY - minY) / cellSize);
+        // Check the size before casting, so a tiny cell size can't overflow the int dimensions.
+        double cols = Math.Round((maxX - minX) / cellSize);
+        double rows = Math.Round((maxY - minY) / cellSize);
+        ValidateGridSize(cols, rows, cellSize);
+
+        int nCols = (int)cols;
+        int nRows = (int)rows;
         double yOriginTop = minY + nRows * cellSize;
 
         return InterpolateToGrid(points, cellSize, nCols, nRows, minX, yOriginTop);
@@ -148,6 +157,9 @@ public sealed class SplineTensionGrass : ISpline
     {
         if (points.Count < 4)
             throw new ArgumentException("Need at least 4 points for spline interpolation.", nameof(points));
+
+        ValidateCellSize(cellSize);
+        ValidateGridSize(nCols, nRows, cellSize);
 
         var grid = new CoordinateM[nCols, nRows];
 
@@ -328,8 +340,10 @@ public sealed class SplineTensionGrass : ISpline
                 pz[k] = allZ[idx] - zMin;
             }
 
-            // Solve using in-place jagged-array LU decomposition
-            var coeffs = SolveCrstSystemFast(pxn, pyn, pz, n, fi, Smoothing);
+            // Solve using in-place jagged-array LU decomposition. With n >= 1 every matrix row has a 1 from the
+            // trend constraint, so the solver never hits an all-zero row.
+            var coeffs = SolveCrstSystemFast(pxn, pyn, pz, n, fi, Smoothing)
+                ?? throw new InvalidOperationException("The spline system has an all-zero row.");
 
             // Evaluate grid cells for this leaf using its NRows/NCols
             // (matches GRASS: each segment evaluates exactly its own grid cells)
@@ -344,53 +358,31 @@ public sealed class SplineTensionGrass : ISpline
             rowStart = Math.Max(0, rowStart);
             rowEnd = Math.Min(nRows, rowEnd);
 
-            if (coeffs != null)
+            double c0 = coeffs[0] + zMin;
+            for (int row = rowStart; row < rowEnd; row++)
             {
-                double c0 = coeffs[0] + zMin;
-                for (int row = rowStart; row < rowEnd; row++)
+                // Translated grid cell y for normalization
+                double yt = gridYMax + nsRes * 0.5 - (row + 1) * nsRes;
+                double yn = (yt - leafYMin) / dnorm;
+
+                for (int col = colStart; col < colEnd; col++)
                 {
-                    // Translated grid cell y for normalization
-                    double yt = gridYMax + nsRes * 0.5 - (row + 1) * nsRes;
-                    double yn = (yt - leafYMin) / dnorm;
+                    // Translated grid cell x for normalization
+                    double xt = gridXMin + (col + 0.5) * ewRes;
+                    double xn = (xt - leafXMin) / dnorm;
 
-                    for (int col = colStart; col < colEnd; col++)
+                    double z = c0;
+                    for (int j = 0; j < n; j++)
                     {
-                        // Translated grid cell x for normalization
-                        double xt = gridXMin + (col + 0.5) * ewRes;
-                        double xn = (xt - leafXMin) / dnorm;
-
-                        double z = c0;
-                        for (int j = 0; j < n; j++)
-                        {
-                            double ddx = xn - pxn[j];
-                            double ddy = yn - pyn[j];
-                            z += coeffs[j + 1] * CrstBasis(ddx * ddx + ddy * ddy, fi);
-                        }
-
-                        // Output in original (untranslated) coordinates
-                        double x = xOrigin + (col + 0.5) * cellSize;
-                        double y = yOriginTop - (row + 0.5) * cellSize;
-                        grid[col, row] = new CoordinateM(x, y, z);
+                        double ddx = xn - pxn[j];
+                        double ddy = yn - pyn[j];
+                        z += coeffs[j + 1] * CrstBasis(ddx * ddx + ddy * ddy, fi);
                     }
-                }
-            }
-            else
-            {
-                // IDW fallback (uses translated point coordinates via allX/allY)
-                var rp = new List<CoordinateM>(n);
-                foreach (int idx in regionIndices)
-                    rp.Add(new CoordinateM(allX[idx], allY[idx], allZ[idx] + zMin));
 
-                for (int row = rowStart; row < rowEnd; row++)
-                {
-                    double yt = gridYMax + nsRes * 0.5 - (row + 1) * nsRes;
-                    for (int col = colStart; col < colEnd; col++)
-                    {
-                        double xt = gridXMin + (col + 0.5) * ewRes;
-                        double x = xOrigin + (col + 0.5) * cellSize;
-                        double y = yOriginTop - (row + 0.5) * cellSize;
-                        grid[col, row] = new CoordinateM(x, y, FallbackIdw(rp, xt, yt));
-                    }
+                    // Output in original (untranslated) coordinates
+                    double x = xOrigin + (col + 0.5) * cellSize;
+                    double y = yOriginTop - (row + 0.5) * cellSize;
+                    grid[col, row] = new CoordinateM(x, y, z);
                 }
             }
         });
@@ -400,7 +392,8 @@ public sealed class SplineTensionGrass : ISpline
 
     /// <summary>
     /// GRASS Completely Regularized Spline with Tension radial basis function (IL_crst).
-    /// Computes R(r²) = -Ei(-fi²*r²/4) where Ei is the exponential integral.
+    /// Computes R(r²) = Ein(x) = E1(x) + γ + ln(x) with x = fi²*r²/4, where E1 is the exponential integral
+    /// (equivalently -Ei(-x) + γ + ln(x)); the γ + ln(x) terms keep R finite and zero at r = 0.
     /// Input r is DISTANCE SQUARED.
     /// </summary>
     internal static double CrstBasis(double rSquared, double fi)
@@ -594,6 +587,7 @@ public sealed class SplineTensionGrass : ISpline
     /// Estimates cell size from point extent: min(width, height) / 250.
     /// Matches Esri's formula used by AEDT.
     /// </summary>
+    /// <exception cref="ArgumentException">The points have no width or no height (they are collinear).</exception>
     public static double EstimateCellSize(IList<CoordinateM> points)
     {
         double minX = double.MaxValue, minY = double.MaxValue;
@@ -609,72 +603,33 @@ public sealed class SplineTensionGrass : ISpline
 
         double width = maxX - minX;
         double height = maxY - minY;
+
+        if (!(Math.Min(width, height) > 0))
+        {
+            throw new ArgumentException(
+                $"The points span {width} x {height}; they must extend in both directions (not collinear) to derive a cell size.",
+                nameof(points));
+        }
+
         return Math.Min(width, height) / 250.0;
     }
 
-    /// <summary>
-    /// Inverse Distance Weighted interpolation fallback for singular spline systems.
-    /// </summary>
-    internal static double FallbackIdw(List<CoordinateM> points, double x, double y)
+    private static void ValidateCellSize(double cellSize)
     {
-        if (points.Count == 0)
-            return 0.0;
-
-        double numerator = 0, denominator = 0;
-        foreach (var p in points)
-        {
-            double dx = x - p.X;
-            double dy = y - p.Y;
-            double d = Math.Sqrt(dx * dx + dy * dy);
-            if (d < 1e-15) return p.M;
-            double w = 1.0 / (d * d);
-            numerator += w * p.M;
-            denominator += w;
-        }
-        return numerator / denominator;
+        if (!(cellSize > 0) || double.IsInfinity(cellSize))
+            throw new ArgumentException($"Cell size must be positive and finite, got {cellSize}.", nameof(cellSize));
     }
 
-    /// <summary>
-    /// Diagnostic: returns the indices of points that survive density filtering
-    /// for the given grid parameters. Used to compare filtering behavior against GRASS GIS.
-    /// </summary>
-    internal HashSet<int> GetAcceptedPointIndices(List<CoordinateM> points, double cellSize,
-        int nCols, int nRows, double xOrigin, double yOriginTop)
+    private static void ValidateGridSize(double nCols, double nRows, double cellSize)
     {
-        int nPts = points.Count;
-        var allX = new double[nPts];
-        var allY = new double[nPts];
-        double rawMinX = double.MaxValue, rawMinY = double.MaxValue;
-        for (int i = 0; i < nPts; i++)
-        {
-            allX[i] = points[i].X;
-            allY[i] = points[i].Y;
-            if (allX[i] < rawMinX) rawMinX = allX[i];
-            if (allY[i] < rawMinY) rawMinY = allY[i];
-        }
-        for (int i = 0; i < nPts; i++)
-        {
-            allX[i] -= rawMinX;
-            allY[i] -= rawMinY;
-        }
+        if (!(nCols >= 1) || !(nRows >= 1))
+            throw new ArgumentException($"The grid must have at least one column and one row, got {nCols} x {nRows}.");
 
-        double gridXMin = xOrigin - rawMinX;
-        double gridYMax = yOriginTop - rawMinY;
-        double gridXMax = xOrigin + nCols * cellSize - rawMinX;
-        double gridYMin = yOriginTop - nRows * cellSize - rawMinY;
-        double dminSq = (cellSize / 2.0) * (cellSize / 2.0);
-
-        var tree = QuadTree.BuildFromGrid(allX, allY, nPts,
-            gridXMin, gridYMin, gridXMax, gridYMax,
-            nRows, nCols, SegMax, dminSq, out _);
-
-        var accepted = new HashSet<int>();
-        foreach (var leaf in tree.GetLeaves())
+        if (nCols * nRows > MaxGridCells)
         {
-            if (leaf.PointIndices == null) continue;
-            foreach (int i in leaf.PointIndices)
-                accepted.Add(i);
+            throw new ArgumentException(
+                $"The grid would be {nCols} x {nRows} cells (cell size {cellSize}), more than {MaxGridCells}. " +
+                "The points are probably (nearly) collinear, or the cell size is too small for their extent.");
         }
-        return accepted;
     }
 }

@@ -268,6 +268,90 @@ public class SplineTensionGrassTests
     }
 
     // ──────────────────────────────────────────
+    // Input validation
+    // ──────────────────────────────────────────
+
+    [TestMethod]
+    [DataRow(double.NaN, 0.1, 0, DisplayName = "NaN tension (used to turn every cell NaN)")]
+    [DataRow(double.PositiveInfinity, 0.1, 0, DisplayName = "infinite tension")]
+    [DataRow(0.0, 0.1, 0, DisplayName = "zero tension")]
+    [DataRow(40.0, -0.1, 0, DisplayName = "negative smoothing (GRASS per-point smoothing, not implemented)")]
+    [DataRow(40.0, double.NaN, 0, DisplayName = "NaN smoothing")]
+    [DataRow(40.0, 0.1, 100, DisplayName = "kMax2 below npMin")]
+    [DataRow(40.0, 0.1, -1, DisplayName = "negative kMax2")]
+    public void Constructor_InvalidParameter_Throws(double tension, double smoothing, int kMax2)
+    {
+        // Act
+        Action act = () => _ = new SplineTensionGrass(tension, smoothing, npMin: 300, kMax2: kMax2);
+
+        // Assert
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [TestMethod]
+    public void Constructor_ZeroSmoothing_IsAllowed()
+    {
+        // Act
+        var grass = new SplineTensionGrass(smoothing: 0.0);
+
+        // Assert
+        grass.Smoothing.Should().Be(0.0);
+    }
+
+    [TestMethod]
+    public void EstimateCellSize_CollinearPoints_Throws()
+    {
+        // Arrange - all points on one horizontal line: zero height (used to give cell size 0 and an overflow)
+        var points = Enumerable.Range(0, 10).Select(i => new CoordinateM(i * 100.0, 5.0, 50.0)).ToList();
+
+        // Act
+        Action act = () => SplineTensionGrass.EstimateCellSize(points);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*collinear*");
+    }
+
+    [TestMethod]
+    public void InterpolateToGrid_NearlyCollinearWgs84Points_ThrowsInsteadOfAllocatingHugeGrid()
+    {
+        // Arrange - 50 points along one parallel (~4 km); the LCC arc makes the extent ~1 m tall, which used to
+        // produce a grid of about 897,000 x 251 cells and hang
+        var points = Enumerable.Range(0, 50)
+            .Select(i => new CoordinateM(-74.0 + i * 0.001, 40.7, 50.0 + i))
+            .ToList();
+
+        // Act
+        Action act = () => new SplineTensionGrass().InterpolateToGrid(points, 40.7, -74.0);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*more than 25000000*");
+    }
+
+    [TestMethod]
+    [DataRow(0.0, DisplayName = "zero")]
+    [DataRow(-1.0, DisplayName = "negative")]
+    [DataRow(double.NaN, DisplayName = "NaN")]
+    public void InterpolateToGrid_InvalidCellSize_Throws(double cellSize)
+    {
+        // Act
+        Action act = () => new SplineTensionGrass(npMin: 4, kMax2: 20).InterpolateToGrid(CreateTestPoints(), cellSize);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*Cell size*");
+    }
+
+    [TestMethod]
+    public void InterpolateToGrid_ExplicitExtentOverLimit_Throws()
+    {
+        // Act - 10,000 x 10,000 = 100M cells
+        Action act = () => new SplineTensionGrass(npMin: 4, kMax2: 20)
+            .InterpolateToGrid(CreateTestPoints(), 0.001, 10_000, 10_000, 0.0, 10.0);
+
+        // Assert
+        act.Should().Throw<ArgumentException>().WithMessage("*more than 25000000*");
+    }
+
+    // ──────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────
 

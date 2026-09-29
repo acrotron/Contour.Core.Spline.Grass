@@ -28,8 +28,8 @@ where *R(r)* is the CRST radial basis function using the exponential integral, a
 
 Processing follows GRASS's `v.surf.rst` flow:
 
-1. **Quadtree construction** -- points inserted incrementally; leaves hold at most `segmax` points; density filter rejects points closer than `dmin`
-2. **Coordinate translation** -- shift so minimum point is near zero for floating-point precision
+1. **Coordinate translation** -- shift so the minimum point is at zero for floating-point precision (done on the points before the quadtree is built; GRASS translates the built tree with `translate_quad()`)
+2. **Quadtree construction** -- points inserted incrementally; leaves hold at most `segmax` points; density filter rejects points closer than `dmin`
 3. **Per-segment interpolation** -- adaptive bisection gathers nearby points, normalizes coordinates, assembles and solves the linear system, evaluates grid cells at cell centers
 
 ## Default Parameters
@@ -73,8 +73,8 @@ Residual differences are caused by floating-point arithmetic across language run
 | `quad_compare()` | `QuadTree.GetQuadrant()` | Grid-based midpoint with odd-count rounding |
 | `quad_divide_data()` | `QuadTree.Subdivide()` | Grid-based subdivision halving rows/cols |
 | `quad_get_points()` | `QuadTree.FindPointsInRegion()` | Range search with strict inequality |
-| `smallest_segment()` | `QuadTree.SmallestLeafWidth()` | X-width of smallest non-empty leaf |
-| `translate_quad()` | `QuadTree.Translate()` | Shift all node bounds by offset |
+| `smallest_segment()` | `QuadTree.SmallestLeafWidth()` | X-width of the smallest leaf covering at least one grid cell |
+| `translate_quad()` | `SplineTensionGrass.InterpolateToGrid` | Points are shifted before the tree is built instead |
 | `IL_interp_segments_2d()` | `InterpolateToGrid()` per-leaf loop | Bisection search + solve + evaluate |
 | `IL_crst()` | `CrstBasis()` | CRST radial basis function |
 | `IL_crs_matrix_2d()` | `SolveCrstSystemFast()` | Matrix assembly + LU decomposition |
