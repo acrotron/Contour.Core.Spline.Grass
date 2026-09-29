@@ -8,7 +8,7 @@
 		<Authors>Acrotron</Authors>
 		<Company>Acrotron</Company>
 		<Copyright>Copyright (c) 2026 Acrotron</Copyright>
-		<RepositoryUrl>https://github.com/bjorn/Contour.Core.Spline.Grass</RepositoryUrl>
+		<RepositoryUrl>https://github.com/acrotron/Contour.Core.Spline.Grass</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 	</PropertyGroup>
 </Project>
